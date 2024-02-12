@@ -9,11 +9,17 @@
 #include "../led_lkm.h"
 
 #define MODNAME "led_test_lkm"
-#define READ_LENGTH 1
-static void __exit led_lkm_exit(void)
-    {
-    printk(KERN_INFO "Exiting LED LKM module");
-}
+#define READ_LENGTH sizeof(int)
+
+MODULE_AUTHOR("led experiment module");
+MODULE_DESCRIPTION("Testing how to use GPIO to activate and deactivate a led");
+MODULE_LICENSE("GPL");
+MODULE_VERSION("0.1");
+struct ledLkmCtx {
+    struct device *dev;
+    atomic_t powered;
+};
+static struct ledLkmCtx *gpriv; 
 
 static int open_led_lkm(struct inode *inode, struct file *flip) {
     return nonseekable_open(inode, flip);
@@ -22,7 +28,7 @@ static ssize_t read_led_lkm(struct file *filp, char __user *ubuf, size_t count, 
     int ret, powered;
     ret = -EFAULT;
     powered = atomic_read(gpriv->powered);
-    if (copy_to_user(ubuf, powered, READ_LENGTH)) {
+    if (copy_to_user(ubuf, (void *)powered, READ_LENGTH)) {
         goto out;
     }
     ret = READ_LENGTH;
@@ -56,9 +62,9 @@ static long ioctl_led_lkm(struct file *filp, unsigned int cmd, unsigned long arg
             break;
         default:
             return -ENOTTY;
-    return retval;
     }
 
+    return retval;
 }
 static const struct file_operations led_lkm_fops = {
     .llseek = no_llseek,
@@ -74,15 +80,6 @@ static struct miscdevice led_lkm_miscdev = {
     .mode = 0666,
     .fops = &led_lkm_fops,
 };
-struct ledLkmCtx {
-    struct device *dev;
-    atomic_t powered;
-};
-static struct ledLkmCtx *gpriv; 
-MODULE_AUTHOR("led experiment module");
-MODULE_DESCRIPTION("Testing how to use GPIO to activate and deactivate a led");
-MODULE_LICENSE("GPL");
-MODULE_VERSION("0.1");
 
 static int __init led_lkm_init(void)
 {
@@ -100,7 +97,7 @@ static int __init led_lkm_init(void)
     // kzalloc sets memory to 0
     gpriv = devm_kzalloc(dev, sizeof(struct ledLkmCtx), GFP_KERNEL);
     gpriv->dev = dev;
-    atomic_set(gpriv->powered, 0);
+    atomic_set(&gpriv->powered, 0);
     return 0;
 }
 
