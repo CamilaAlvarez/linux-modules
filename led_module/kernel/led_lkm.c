@@ -8,10 +8,13 @@
 #include <linux/ioctl.h>
 #include <linux/platform_device.h>
 #include <linux/mutex.h>
+#include <linux/io.h>
 #include "../led_lkm.h"
 
 #define MODNAME "led_test_lkm"
 #define READ_LENGTH sizeof(int)
+#define BASE_MEMORY_ADDRESS 0x7e200000
+#define RESOURCE_SIZE 58*4 
 #define GPIO_PIN_OFFSET 0x08
 #define GPIO_SET_PIN_OFFSET 0x1c
 #define GPIO_CLEAR_PIN_OFFSET 0x28
@@ -59,18 +62,19 @@ static long ioctl_led_lkm(struct file *filp, unsigned int cmd, unsigned long arg
         return -ENOTTY;
     }
     u32 mask = 1 << 22;
+    u32 gpset0;
     switch (cmd) {
         case IOCTL_POWER_ON:
             pr_debug("Power on\n");
             mutex_lock(&gpriv->mutex_mmio);
-            u32 gpset0 = ioread32(gpriv->base_io + GPIO_SET_PIN_OFFSET);
+            gpset0 = ioread32(gpriv->base_io + GPIO_SET_PIN_OFFSET);
             gpset0 |= mask;
             iowrite32(gpriv->base_io + GPIO_SET_PIN_OFFSET);
             mutex_unlock(&gpriv->mutex_mmio);
             break;
         case IOCTL_POWER_OFF:
             mutex_lock(&gpriv->mutex_mmio);
-            u32 gpset0 = ioread32(gpriv->base_io + GPIO_CLEAR_PIN_OFFSET);
+            gpset0 = ioread32(gpriv->base_io + GPIO_CLEAR_PIN_OFFSET);
             gpset0 |= mask;
             iowrite32(gpriv->base_io + GPIO_CLEAR_PIN_OFFSET);
             mutex_unlock(&gpriv->mutex_mmio);
@@ -78,7 +82,7 @@ static long ioctl_led_lkm(struct file *filp, unsigned int cmd, unsigned long arg
             break;
         case IOCTL_POWER_READ:
             mutex_lock(&gpriv->mutex_mmio);
-            u32 gpset0 = ioread32(gpriv->base_io + GPIO_READ_PIN_OFFSET);
+            gpset0 = ioread32(gpriv->base_io + GPIO_READ_PIN_OFFSET);
             int value = gpset0 & mask;
             mutex_unlock(&gpriv->mutex_mmio);
             retval = __put_user(value > 0 ? 1 : 0, (int __user *)arg);
@@ -111,7 +115,6 @@ static int __init led_lkm_init(void)
     printk(KERN_INFO "Entering LED LKM module");
     int ret;
     struct device* dev;
-    struct resource *res;
     ret = misc_register(&led_lkm_miscdev);
     if (ret != 0) {
         // Notice level = 5
@@ -119,14 +122,14 @@ static int __init led_lkm_init(void)
         return ret;
     }
     dev = led_lkm_miscdev.this_device;
-    res = platform_get_resource(dev, IORESOURCE_MEM, 0);
     // kzalloc sets memory to 0
     gpriv = devm_kzalloc(dev, sizeof(struct ledLkmCtx), GFP_KERNEL);
     gpriv->dev = dev;
     // map the memory
-    gpriv->base_io = devm_ioremap_resource(dev, res);
-    if (IS_ERR(gpriv->base_io)){
-        return PTR_ERR(priv->base_io);
+    gpriv->base_io = devm_ioremap(dev, BASE_MEMORY_ADDRESS, RESOURCE_SIZE);
+    if (gpriv->base_io == NULL){
+        dev_err(dev, "register mapping failed\n");
+        return -ENXIO;
     }
     mutex_init(&gpriv->mutex_mmio);
     atomic_set(&gpriv->powered, 0);
@@ -145,6 +148,7 @@ static void __exit led_lkm_exit(void){
     u32 mask1 = ~(1 << 6 | 1 << 7 | 1 << 8);
     gpfsel2 = (gpfsel2 & mask1);
     iowrite32(gpfsel2, gpriv->base_io + GPIO_PIN_OFFSET);
+    misc_deregister(&led_lkm_miscdevplatform_get_resource);
     printk(KERN_INFO "Exiting LED LKM module");
 }
 
