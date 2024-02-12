@@ -128,7 +128,7 @@ static int __init led_lkm_init(void)
     if (IS_ERR(gpriv->base_io)){
         return PTR_ERR(priv->base_io);
     }
-    mutex_init(gpriv->mutex_mmio);
+    mutex_init(&gpriv->mutex_mmio);
     atomic_set(&gpriv->powered, 0);
     // Mark GPIO22 as output
     u32 gpfsel2 = ioread32(gpriv->base_io + GPIO_PIN_OFFSET);
