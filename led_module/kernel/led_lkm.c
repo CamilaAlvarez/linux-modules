@@ -148,7 +148,7 @@ static void __exit led_lkm_exit(void){
     u32 mask1 = ~(1 << 6 | 1 << 7 | 1 << 8);
     gpfsel2 = (gpfsel2 & mask1);
     iowrite32(gpfsel2, gpriv->base_io + GPIO_PIN_OFFSET);
-    misc_deregister(&led_lkm_miscde);
+    misc_deregister(&led_lkm_miscdev);
     printk(KERN_INFO "Exiting LED LKM module");
 }
 
