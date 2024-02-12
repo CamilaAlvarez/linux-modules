@@ -27,7 +27,7 @@ static int open_led_lkm(struct inode *inode, struct file *flip) {
 static ssize_t read_led_lkm(struct file *filp, char __user *ubuf, size_t count, loff_t *oof) {
     int ret, powered;
     ret = -EFAULT;
-    powered = atomic_read(gpriv->powered);
+    powered = atomic_read(&gpriv->powered);
     if (copy_to_user(ubuf, (void *)powered, READ_LENGTH)) {
         goto out;
     }
