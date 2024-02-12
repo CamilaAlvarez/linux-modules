@@ -12,7 +12,7 @@ int main(int argc, char **argv) {
     int fd, power;
 
     if (argc < 2) {
-        frpintf(stderr, "Usage: %s device_file\n\
+        fprintf(stderr, "Usage: %s device_file\n\
   If device_file does not exist, create it using mknod(1) (as root)\n", argv[0]);
         exit(EXIT_FAILURE);
     }
