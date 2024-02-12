@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <unistd.h> // exit
+#include <unistd.h> // exit, sleep
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h> //O_RDWR	
@@ -27,7 +27,14 @@ int main(int argc, char **argv) {
         close(fd);
         exit(EXIT_FAILURE);
     }
+    if (ioctl(fd, IOCTL_POWER_READ, &power) == -1) {
+        perror("ioctl IOCTL_POWER_READ failed"); 
+        close(fd);
+        exit(EXIT_FAILURE);
+    }
+    printf("Power: %d\n", power);
 
+    sleep(10);
 
     if (ioctl(fd, IOCTL_POWER_OFF, 0) == -1) {
         perror("ioctl IOCTL_POWER_OFF failed"); 
@@ -35,13 +42,12 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-
     if (ioctl(fd, IOCTL_POWER_READ, &power) == -1) {
         perror("ioctl IOCTL_POWER_READ failed"); 
         close(fd);
         exit(EXIT_FAILURE);
     }
-
+    printf("Power: %d\n", power);
     close(fd);
 	exit(EXIT_SUCCESS);
 

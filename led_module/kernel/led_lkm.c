@@ -6,11 +6,17 @@
 #include <linux/fs.h>
 #include <linux/atomic.h>
 #include <linux/ioctl.h>
+#include <linux/platform_device.h>
+#include <linux/mutex.h>
 #include "../led_lkm.h"
 
 #define MODNAME "led_test_lkm"
 #define READ_LENGTH sizeof(int)
-
+#define GPIO_PIN_OFFSET 0x08
+#define GPIO_SET_PIN_OFFSET 0x1c
+#define GPIO_CLEAR_PIN_OFFSET 0x28
+#define GPIO_READ_PIN_OFFSET 0x34
+// It's not a register per pin! I'll have to write to multiple registers!
 MODULE_AUTHOR("led experiment module");
 MODULE_DESCRIPTION("Testing how to use GPIO to activate and deactivate a led");
 MODULE_LICENSE("GPL");
@@ -18,6 +24,8 @@ MODULE_VERSION("0.1");
 struct ledLkmCtx {
     struct device *dev;
     atomic_t powered;
+    void *base_io;
+    struct mutex mutex_mmio;
 };
 static struct ledLkmCtx *gpriv; 
 
@@ -50,14 +58,30 @@ static long ioctl_led_lkm(struct file *filp, unsigned int cmd, unsigned long arg
         pr_info("ioctl failed; invalid cmd?\n");
         return -ENOTTY;
     }
+    u32 mask = 1 << 22;
     switch (cmd) {
         case IOCTL_POWER_ON:
             pr_debug("Power on\n");
+            mutex_lock(&gpriv->mutex_mmio);
+            u32 gpset0 = ioread32(gpriv->base_io + GPIO_SET_PIN_OFFSET);
+            gpset0 |= mask;
+            iowrite32(gpriv->base_io + GPIO_SET_PIN_OFFSET);
+            mutex_unlock(&gpriv->mutex_mmio);
             break;
         case IOCTL_POWER_OFF:
+            mutex_lock(&gpriv->mutex_mmio);
+            u32 gpset0 = ioread32(gpriv->base_io + GPIO_CLEAR_PIN_OFFSET);
+            gpset0 |= mask;
+            iowrite32(gpriv->base_io + GPIO_CLEAR_PIN_OFFSET);
+            mutex_unlock(&gpriv->mutex_mmio);
             pr_debug("Power off\n");
             break;
         case IOCTL_POWER_READ:
+            mutex_lock(&gpriv->mutex_mmio);
+            u32 gpset0 = ioread32(gpriv->base_io + GPIO_READ_PIN_OFFSET);
+            int value = gpset0 & mask;
+            mutex_unlock(&gpriv->mutex_mmio);
+            retval = __put_user(value > 0 ? 1 : 0, (int __user *)arg);
             pr_debug("Read power value\n");
             break;
         default:
@@ -83,10 +107,11 @@ static struct miscdevice led_lkm_miscdev = {
 
 static int __init led_lkm_init(void)
 {
+    // Here I should mark the GPIO22 as output
     printk(KERN_INFO "Entering LED LKM module");
     int ret;
     struct device* dev;
-
+    struct resource *res;
     ret = misc_register(&led_lkm_miscdev);
     if (ret != 0) {
         // Notice level = 5
@@ -94,15 +119,32 @@ static int __init led_lkm_init(void)
         return ret;
     }
     dev = led_lkm_miscdev.this_device;
+    res = platform_get_resource(dev, IORESOURCE_MEM, 0);
     // kzalloc sets memory to 0
     gpriv = devm_kzalloc(dev, sizeof(struct ledLkmCtx), GFP_KERNEL);
     gpriv->dev = dev;
+    // map the memory
+    gpriv->base_io = devm_ioremap_resource(dev, res);
+    if (IS_ERR(gpriv->base_io)){
+        return PTR_ERR(priv->base_io);
+    }
+    mutex_init(gpriv->mutex_mmio);
     atomic_set(&gpriv->powered, 0);
+    // Mark GPIO22 as output
+    u32 gpfsel2 = ioread32(gpriv->base_io + GPIO_PIN_OFFSET);
+    u32 mask1 = ~(1 << 6 | 1 << 7 | 1 << 8);
+    u32 mask2 = 1 << 6;
+    gpfsel2 = (gpfsel2 & mask1) | mask2;
+    iowrite32(gpfsel2, gpriv->base_io + GPIO_PIN_OFFSET);
     return 0;
 }
 
-static void __exit led_lkm_exit(void)
-    {
+static void __exit led_lkm_exit(void){
+    // reset pin to input
+    u32 gpfsel2 = ioread32(gpriv->base_io + GPIO_PIN_OFFSET);
+    u32 mask1 = ~(1 << 6 | 1 << 7 | 1 << 8);
+    gpfsel2 = (gpfsel2 & mask1);
+    iowrite32(gpfsel2, gpriv->base_io + GPIO_PIN_OFFSET);
     printk(KERN_INFO "Exiting LED LKM module");
 }
 
