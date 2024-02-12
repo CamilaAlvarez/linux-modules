@@ -28,7 +28,7 @@ static ssize_t read_led_lkm(struct file *filp, char __user *ubuf, size_t count, 
     int ret, powered;
     ret = -EFAULT;
     powered = atomic_read(&gpriv->powered);
-    if (copy_to_user(ubuf, (void *)powered, READ_LENGTH)) {
+    if (copy_to_user(ubuf, &powered, READ_LENGTH)) {
         goto out;
     }
     ret = READ_LENGTH;
