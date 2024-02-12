@@ -69,14 +69,14 @@ static long ioctl_led_lkm(struct file *filp, unsigned int cmd, unsigned long arg
             mutex_lock(&gpriv->mutex_mmio);
             gpset0 = ioread32(gpriv->base_io + GPIO_SET_PIN_OFFSET);
             gpset0 |= mask;
-            iowrite32(gpriv->base_io + GPIO_SET_PIN_OFFSET);
+            iowrite32(gpset0, gpriv->base_io + GPIO_SET_PIN_OFFSET);
             mutex_unlock(&gpriv->mutex_mmio);
             break;
         case IOCTL_POWER_OFF:
             mutex_lock(&gpriv->mutex_mmio);
             gpset0 = ioread32(gpriv->base_io + GPIO_CLEAR_PIN_OFFSET);
             gpset0 |= mask;
-            iowrite32(gpriv->base_io + GPIO_CLEAR_PIN_OFFSET);
+            iowrite32(gpset0, gpriv->base_io + GPIO_CLEAR_PIN_OFFSET);
             mutex_unlock(&gpriv->mutex_mmio);
             pr_debug("Power off\n");
             break;
@@ -148,7 +148,7 @@ static void __exit led_lkm_exit(void){
     u32 mask1 = ~(1 << 6 | 1 << 7 | 1 << 8);
     gpfsel2 = (gpfsel2 & mask1);
     iowrite32(gpfsel2, gpriv->base_io + GPIO_PIN_OFFSET);
-    misc_deregister(&led_lkm_miscdevplatform_get_resource);
+    misc_deregister(&led_lkm_miscde);
     printk(KERN_INFO "Exiting LED LKM module");
 }
 
