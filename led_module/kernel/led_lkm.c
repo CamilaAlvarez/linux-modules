@@ -14,7 +14,7 @@
 #define MODNAME "led_test_lkm"
 #define READ_LENGTH sizeof(int)
 #define BASE_MEMORY_ADDRESS 0x7e200000
-#define RESOURCE_SIZE 58*4 
+#define RESOURCE_SIZE 232 //58*4 
 #define GPIO_PIN_OFFSET 0x08
 #define GPIO_SET_PIN_OFFSET 0x1c
 #define GPIO_CLEAR_PIN_OFFSET 0x28
@@ -125,6 +125,11 @@ static int __init led_lkm_init(void)
     // kzalloc sets memory to 0
     gpriv = devm_kzalloc(dev, sizeof(struct ledLkmCtx), GFP_KERNEL);
     gpriv->dev = dev;
+    // request memory
+    if (!request_mem_region(BASE_MEMORY_ADDRESS, RESOURCE_SIZE, MODNAME)){
+        dev_warn(dev, "couldn't get region for mmio, aborting\n");
+        return -EBUSY;
+    }
     // map the memory
     gpriv->base_io = devm_ioremap(dev, BASE_MEMORY_ADDRESS, RESOURCE_SIZE);
     if (gpriv->base_io == NULL){
