@@ -77,12 +77,12 @@ static long ioctl_led_lkm(struct file *filp, unsigned int cmd, unsigned long arg
     switch (cmd)
     {
     case IOCTL_POWER_ON:
-        pr_debug("Power on\n");
         mutex_lock(&gpriv->mutex_mmio);
         gpset0 = ioread32(gpriv->base_io + GPIO_SET_PIN_OFFSET);
         gpset0 |= mask;
         iowrite32(gpset0, gpriv->base_io + GPIO_SET_PIN_OFFSET);
         mutex_unlock(&gpriv->mutex_mmio);
+        pr_info("Power on\n");
         break;
     case IOCTL_POWER_OFF:
         mutex_lock(&gpriv->mutex_mmio);
@@ -90,7 +90,7 @@ static long ioctl_led_lkm(struct file *filp, unsigned int cmd, unsigned long arg
         gpset0 |= mask;
         iowrite32(gpset0, gpriv->base_io + GPIO_CLEAR_PIN_OFFSET);
         mutex_unlock(&gpriv->mutex_mmio);
-        pr_debug("Power off\n");
+        pr_info("Power off\n");
         break;
     case IOCTL_POWER_READ:
         mutex_lock(&gpriv->mutex_mmio);
@@ -98,7 +98,7 @@ static long ioctl_led_lkm(struct file *filp, unsigned int cmd, unsigned long arg
         int value = gpset0 & mask;
         mutex_unlock(&gpriv->mutex_mmio);
         retval = __put_user(value > 0 ? 1 : 0, (int __user *)arg);
-        pr_debug("Read power value\n");
+        pr_info("Read power value\n");
         break;
     default:
         return -ENOTTY;
