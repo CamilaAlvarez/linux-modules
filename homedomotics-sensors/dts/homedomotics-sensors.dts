@@ -1,0 +1,15 @@
+/dts-v1/;
+/plugin/;
+/ {
+    compatible = "brcm,bcm2835", "brcm,bcm2836", "brcm,bcm2708", "brcm,bcm2709", "brcm,bcm2711";
+    @fragment0 {
+        target-path = "/";
+        __overlay__ {
+            homedomotics_device {
+                compatible = "calvarez,homedomotics";
+                temperature-gpio = <&gpio 17 0>; //GPIO_ACTIVE_HIGH is 0
+                airquality-gpio = <&gpio 27 0>;
+            };
+        };
+    };
+};
