@@ -14,6 +14,10 @@
 #define MODNAME "led_test_lkm"
 #define READ_LENGTH sizeof(int)
 // NOTE: The 0x7e200000 is the base address in the bus address space
+// It is defined <0x7e000000  0x0 0xfe000000  0x01800000>, which means
+// that 0x7e000000 in the child bus address is actually 0xfe000000 in the parent,
+// which is the one we want to map
+// check: https://devicetree-specification.readthedocs.io/en/latest/chapter2-devicetree-basics.html
 #define PERIPH_BASE 0xFE000000
 #define GPIO_BASE (PERIPH_BASE + 0x200000)
 #define BASE_MEMORY_ADDRESS GPIO_BASE
