@@ -5,10 +5,9 @@
     @fragment0 {
         target-path = "/";
         __overlay__ {
-            homedomotics_device {
-                compatible = "calvarez,homedomotics";
+            dht11_module_device {
+                compatible = "calvarez,dht11";
                 temperature-gpio = <&gpio 17 0>; //GPIO_ACTIVE_HIGH is 0
-                airquality-gpio = <&gpio 27 0>;
             };
         };
     };
