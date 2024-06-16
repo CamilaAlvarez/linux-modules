@@ -15,6 +15,8 @@
 #define DHT11_DEVICE_NAME "dht11_module"
 #define MIN_INTERVAL 1000
 
+static ssize_t write_measurements_to_user(char __user *buf, size_t count);
+
 // We cannot sleep in the read since reading from the sensor is time sensitive
 // Also, it is a bad idea to sleep with interrupts disabled!
 
@@ -25,7 +27,12 @@ struct dht11_data
     struct cdev dht11_cdev;
     struct spinlock_t gpio_spinlock;
     static struct gpio_desc *gpio;
+    struct spinlock_t read_jiffies_spinlock;
     uint64_t last_read_jiffies; // Module can be read once per second
+    char last_successful_humidity;
+    char last_successful_humidity_decimal;
+    char last_successful_temperature;
+    char last_successful_temperature_decimal;
 };
 static struct dht11_data *data;
 
@@ -37,9 +44,17 @@ static int close_sensors(struct inode *inode, struct file *flip)
 {
     return 0;
 }
-struct ssize_t read_sensors(struct file *flip, char __user *buf, size_t count loff_t *off)
+static ssize_t read_sensors(struct file *flip, char __user *buf, size_t count, loff_t *off)
 {
     // 1. Verify that the last request was over a second ago
+    uint64_t current_jiffies = get_jiffies_64();
+    if ((current_jiffies - data->last_read_jiffies) <= (uint64_t)msecs_to_jiffies(MIN_INTERVAL))
+    {
+        return write_measurements_to_user(buf, count);
+    }
+    spin_lock(&data->read_jiffies_spinlock);
+    data->last_read_jiffies = current_jiffies;
+    spin_unlock(&data->read_jiffies_spinlock);
 
     int value;
     pr_info("Read from dht11\n");
@@ -76,6 +91,7 @@ static int dht11_probe(struct platform_device *pdev)
     // By passing the device the function should be able to access de dt
     data->gpio = gpiod_get(dev, "gpio", GPIOD_IN);
     spin_lock_init(&data->gpio_spinlock);
+    spin_lock_init(&data->read_jiffies_spinlock);
 
     error = alloc_chrdev_region(&devt, 0, 1, DHT11_DEVICE_NAME);
     if (error)
@@ -110,7 +126,8 @@ static int dht11_probe(struct platform_device *pdev)
         unregister_chrdev_region(devt, 1);
         return -1;
     }
-    data->last_read_jiffies = get_jiffies_64();
+    // To allow the device to be read instantly after it has been initialized
+    data->last_read_jiffies = get_jiffies_64() - (uint64_t)msecs_to_jiffies(MIN_INTERVAL);
     dev_info(dev, "DHT11 module loaded\n");
 }
 static int dht11_remove(struct platform_device *pdev)
