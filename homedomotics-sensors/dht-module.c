@@ -20,11 +20,13 @@
 #define UINT32_MAX 0xFFFFFFFF
 #define TIMEOUT UINT32_MAX
 #define BITS_IN_SIGNAL 40
+#define BITS_PER_VALUE 8
 #define VALUES_TO_WRITE 5
 
 static ssize_t write_measurements_to_user(char __user *buf, size_t count);
 static u32 count_cycles_in_pulse(int value);
 static bool compute_values(char *low_values, char *high_values);
+static char compute_single_value(char *low_values, char *high_values, int offset);
 
 // We cannot sleep in the read since reading from the sensor is time sensitive
 // Also, it is a bad idea to sleep with interrupts disabled!
@@ -42,7 +44,7 @@ struct dht11_data
     char last_read_successful;
     char last_successful_humidity;
     char last_successful_humidity_decimal;
-    char last_successful_temperature;
+    char last_successful_temperature; // in celsius
     char last_successful_temperature_decimal;
 };
 static struct dht11_data *data;
@@ -244,6 +246,34 @@ static u32 count_cycles_in_pulse(int value)
     jiffies_end = jiffies_get_64();
     pr_info("Took %u cycles (%uus)", count, jiffies_to_usecs(jiffies_end - jiffies_start));
     return count;
+}
+static bool compute_values(char *low_values, char *high_values)
+{
+    char checksum, humidity, humidity_decimal, temperature, temperature_decimal;
+    humidity = compute_single_value(low_values, high_values, 0);
+    humidity_decimal = compute_single_value(low_values, high_values, BITS_PER_VALUE);
+    temperature = compute_single_value(low_values, high_values, BITS_PER_VALUE * 2);
+    temperature_decimal = compute_single_value(low_values, high_values, BITS_PER_VALUE * 3);
+    checksum = compute_single_value(low_values, high_values, BITS_PER_VALUE * 4);
+
+    if (checksum != (humidity + humidity_decimal + temperature + temperature_decimal))
+    {
+        pr_info("Invalid value obtained from DHT11. Checksum doesn't match: expected %c got %c\n",
+                checksum,
+                humidity + humidity_decimal + temperature + temperature_decimal);
+        spin_lock(&data->data_spinlock);
+        data->last_read_successful = 0;
+        spin_unlock(&data->data_spinlock);
+        return false;
+    }
+    spin_lock(&data->data_spinlock);
+    data->last_read_successful = 1;
+    data->last_successful_humidity = humidity;
+    data->last_successful_humidity_decimal = humidity_decimal;
+    data->last_successful_temperature = temperature;
+    data->last_successful_temperature_decimal = temperature_decimal;
+    spin_unlock(&data->data_spinlock);
+    return true;
 }
 static const struct of_device_id dht11_dts_ids[] = {
     {.compatible = "calvarez,dht11"},
