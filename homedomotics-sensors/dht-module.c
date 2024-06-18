@@ -209,7 +209,23 @@ static int dht11_remove(struct platform_device *pdev)
     dev_info(pdev->dev, "DHT11 module unloaded\n");
     return 0;
 }
-
+static ssize_t write_measurements_to_user(char __user *buf, size_t count)
+{
+    if (count < VALUES_TO_WRITE)
+    {
+        pr_err("Requesting less that necessary. Requires %d vs %zu", VALUES_TO_WRITE, count);
+        return 0;
+    }
+    spin_lock(&data->data_spinlock);
+    char data[VALUES_TO_WRITE] = {
+        data->last_read_successful,
+        data->last_successful_humidity,
+        data->last_successful_humidity_decimal,
+        data->last_successful_temperature,
+        data->last_successful_temperature_decimal};
+    spin_unlock(&data->data_spinlock);
+    copy_to_user(buf, data, VALUES_TO_WRITE);
+}
 static const struct of_device_id dht11_dts_ids[] = {
     {.compatible = "calvarez,dht11"},
     {/* NULL value */},
