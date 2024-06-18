@@ -117,8 +117,6 @@ static ssize_t read_sensors(struct file *flip, char __user *buf, size_t count, l
     // 9. We finished the time-sensitive process, we can now re-enable interrupts
     spin_unlock_irqrestore(&data->gpio_spinlock, flags);
     // 10. we compute the values: integral and decimal humity, integral and decimal temperature and checksum
-    // low cycles > high cycles => 0
-    // low cycles < high cycles => 1
     if (!compute_values(low_count, high_count))
     {
         pr_info("Invalid data read from DHT11\n");
@@ -274,6 +272,21 @@ static bool compute_values(char *low_values, char *high_values)
     data->last_successful_temperature_decimal = temperature_decimal;
     spin_unlock(&data->data_spinlock);
     return true;
+}
+static char compute_single_value(char *low_values, char *high_values, int offset)
+{
+    char value = 0;
+    // MSB comes first
+    for (size_t i = 0; i < BITS_PER_VALUE; i++)
+    {
+        // low cycles > high cycles => 0
+        // low cycles < high cycles => 1
+        if (low_values[i + offset] < high_values[i + offset])
+        {
+            value |= (1 << BITS_PER_VALUE - 1 - i);
+        }
+    }
+    return value;
 }
 static const struct of_device_id dht11_dts_ids[] = {
     {.compatible = "calvarez,dht11"},
