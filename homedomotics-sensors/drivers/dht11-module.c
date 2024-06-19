@@ -14,7 +14,7 @@
 #include <linux/delay.h>
 #include <linux/smp.h>
 #include <linux/cpufreq.h>
-#include "dht11-data.h"
+#include "../include/dht11-data.h"
 
 #define DHT11_DEVICE_NAME "dht11_module"
 #define HIGH_SIGNAL 1
