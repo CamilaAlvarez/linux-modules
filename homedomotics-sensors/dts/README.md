@@ -3,15 +3,34 @@
 ## Compiling
 
 We can use ``dtc``.
-```
-dtc -I input_format -O output_format -o output_file input_file
-```
+````
+dtc -@ -I input_format -O output_format -o output_file input_file
+````
 
 ## Installing
 
-Note that overlay files are located in ``/boot/overlays`` and have an ``.dtbo`` extension.
+To dynamically install an overlay we need to:
 
-After compiling the file we need to add the following line to ``/boot/config.txt``.
-```
-dtoverlay="dht11-module"
-```
+1. Make sure `configfs` is mounted
+
+````
+mount -t configfs non /sys/kernel/config 
+````
+
+2. Create folder for the overlay ``foo`` under the overlays folder
+
+````
+mkdir /sys/kernel/config/device-tree/overlay/fo
+````
+
+3. Load the overlay into the directory:
+
+````
+cat foo.dtbo > /sys/kernel/config/device-tree/overlay/foo/dtbo
+````
+
+4. To remove the overlay and undo the changes:
+
+````
+rmdir /sys/kernel/config/device-tree/overlay/foo
+````
