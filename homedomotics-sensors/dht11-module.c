@@ -12,6 +12,8 @@
 #include <linux/jiffies.h>
 // non-blocking and cannot sleep
 #include <linux/delay.h>
+#include <linux/smp.h>
+#include <linux/cpufreq.h>
 
 #define DHT11_DEVICE_NAME "dht11_module"
 #define HIGH_SIGNAL 1
@@ -46,9 +48,9 @@ struct dht11_data
     char last_successful_humidity_decimal;
     char last_successful_temperature; // in celsius
     char last_successful_temperature_decimal;
+    int max_cycles;
 };
 static struct dht11_data *data;
-static long max_cycles; // measured in jiffies
 
 static int open_sensors(struct inode *inode, struct file *flip)
 {
@@ -72,6 +74,10 @@ static ssize_t read_sensors(struct file *flip, char __user *buf, size_t count, l
     data->last_read_jiffies = current_jiffies;
     spin_unlock(&data->read_jiffies_spinlock);
 
+    spin_lock(&data->data_spinlock);
+    data->max_cycles = cpufreq_get(smp_processor_id()); // Frequency on KHZ (for 1ms = kHZ*1000/1000)
+    spin_unlock(&data->data_spinlock);
+
     // 2. Send start signal
     spin_lock(&data->gpio_spinlock);
     // 2.1 pin is supposed to be in high, we force that
@@ -88,10 +94,11 @@ static ssize_t read_sensors(struct file *flip, char __user *buf, size_t count, l
     mdelay(20);
     // 3. the time sensitive process starts, we need to disable irqs
     spin_lock_irqsave(&data->gpio_spinlock, irq_flags);
-    // 4. set pin as input
+    // 4. pull up and wait for 20-40us
+    gpiod_set_value(data->gpio, HIGH_SIGNAL);
+    udelay(40);
+    // 5. set pin as input
     gpiod_direction_input(data->gpio);
-    // 5. wait for 20-40us
-    ndelay(40);
     // 6. expect low pulse for 80us
     if (count_cycles_in_pulse(LOW_SIGNAL) == TIMEOUT)
     {
@@ -234,9 +241,7 @@ static ssize_t write_measurements_to_user(char __user *buf, size_t count)
 // This function is called with irqs disabled
 static u32 count_cycles_in_pulse(int value)
 {
-    u64 jiffies_start, jiffies_end;
     u32 count = 0;
-    jiffies_start = get_jiffies_64();
     while (gpiod_get_value(data->gpio) == value)
     {
         if (count++ >= max_cycles)
@@ -244,8 +249,7 @@ static u32 count_cycles_in_pulse(int value)
             return TIMEOUT;
         }
     }
-    jiffies_end = get_jiffies_64();
-    pr_info("Took %u cycles (%uus)", count, jiffies_to_usecs(jiffies_end - jiffies_start));
+    pr_info("Took %u cycles", count);
     return count;
 }
 static bool compute_values(u32 *low_values, u32 *high_values)
@@ -278,7 +282,7 @@ static bool compute_values(u32 *low_values, u32 *high_values)
 }
 static char compute_single_value(u32 *low_values, u32 *high_values, int offset)
 {
-    char value = 0;
+    u8 value = 0;
     // MSB comes first
     for (size_t i = 0; i < BITS_PER_VALUE; i++)
     {
