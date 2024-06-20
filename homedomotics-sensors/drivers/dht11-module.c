@@ -258,7 +258,7 @@ static u32 count_cycles_in_pulse(struct dht11_module_data *dht11_data, int value
             return TIMEOUT;
         }
     }
-    pr_info("Took %u cycles", count);
+    pr_debug("Took %u cycles", count);
     return count;
 }
 static bool compute_values(struct dht11_module_data *dht11_data, u32 *low_values, u32 *high_values)
