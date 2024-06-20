@@ -24,12 +24,6 @@
 #define TIMEOUT UINT32_MAX
 #define BITS_IN_SIGNAL 40
 #define BITS_PER_VALUE 8
-
-static ssize_t write_measurements_to_user(struct dht11_module_data *dht11_data, char __user *buf, size_t count);
-static u32 count_cycles_in_pulse(int value);
-static bool compute_values(struct dht11_module_data *dht11_data, u32 *low_values, u32 *high_values);
-static u8 compute_single_value(u32 *low_values, u32 *high_values, int offset);
-
 // We cannot sleep in the read since reading from the sensor is time sensitive
 // Also, it is a bad idea to sleep with interrupts disabled!
 
@@ -50,6 +44,10 @@ struct dht11_module_data
     u8 last_successful_temperature_decimal;
     int max_cycles;
 };
+static ssize_t write_measurements_to_user(struct dht11_module_data *dht11_data, char __user *buf, size_t count);
+static u32 count_cycles_in_pulse(struct dht11_module_data *dht11_data, int value);
+static bool compute_values(struct dht11_module_data *dht11_data, u32 *low_values, u32 *high_values);
+static u8 compute_single_value(u32 *low_values, u32 *high_values, int offset);
 static int open_sensors(struct inode *inode, struct file *flip)
 {
     struct dht11_module_data *dht11_data = container_of(inode->i_cdev, struct dht11_module_data, dht11_cdev);
@@ -64,10 +62,12 @@ static ssize_t read_sensors(struct file *flip, char __user *buf, size_t count, l
 {
     struct dht11_module_data *dht11_data;
     unsigned long irq_flags;
-    u32 low_count[BITS_IN_SIGNAL], high_count[BITS_IN_SIGNAL];
+    uint64_t current_jiffies;
+    u32 low_count[BITS_IN_SIGNAL],
+        high_count[BITS_IN_SIGNAL];
     dht11_data = (struct dht11_module_data *)flip->private_data;
     // 1. Verify that the last request was over a second ago
-    uint64_t current_jiffies = get_jiffies_64();
+    current_jiffies = get_jiffies_64();
     if ((current_jiffies - dht11_data->last_read_jiffies) <= (uint64_t)msecs_to_jiffies(MIN_INTERVAL))
     {
         goto writebuf;
@@ -102,7 +102,7 @@ static ssize_t read_sensors(struct file *flip, char __user *buf, size_t count, l
     // 5. set pin as input
     gpiod_direction_input(dht11_data->gpio);
     // 6. expect low pulse for 80us
-    if (count_cycles_in_pulse(LOW_SIGNAL) == TIMEOUT)
+    if (count_cycles_in_pulse(dht11_data, LOW_SIGNAL) == TIMEOUT)
     {
         pr_debug("Timeout while reading low signal from dht11\n");
         dht11_data->last_read_successful = 0;
@@ -110,7 +110,7 @@ static ssize_t read_sensors(struct file *flip, char __user *buf, size_t count, l
         goto writebuf;
     }
     // 7. expect high pulse for 80us
-    if (count_cycles_in_pulse(HIGH_SIGNAL) == TIMEOUT)
+    if (count_cycles_in_pulse(dht11_data, HIGH_SIGNAL) == TIMEOUT)
     {
         pr_debug("Timeout while reading high signal from dht11\n");
         dht11_data->last_read_successful = 0;
@@ -120,8 +120,8 @@ static ssize_t read_sensors(struct file *flip, char __user *buf, size_t count, l
     // 8. Read the data, each bit is represented by one low-high cycle
     for (size_t i = 0; i < BITS_IN_SIGNAL; i++)
     {
-        low_count[i] = count_cycles_in_pulse(LOW_SIGNAL);
-        high_count[i] = count_cycles_in_pulse(HIGH_SIGNAL);
+        low_count[i] = count_cycles_in_pulse(dht11_data, LOW_SIGNAL);
+        high_count[i] = count_cycles_in_pulse(dht11_data, HIGH_SIGNAL);
     }
     // 9. We finished the time-sensitive process, we can now re-enable interrupts
     spin_unlock_irqrestore(&dht11_data->gpio_spinlock, irq_flags);
@@ -149,12 +149,12 @@ static const struct file_operations dht11_module_fops = {
 static int dht11_probe(struct platform_device *pdev)
 {
     int error;
-    struct dht11_data *dht11_module_data;
+    struct dht11_module_data *dht11_data;
     struct device *dht11_module_device;
     struct device *dev = &pdev->dev;
     dev_t devt = 0;
 
-    dht11_data = devm_kzalloc(dev, sizeof(struct dht11_data), GFP_KERNEL);
+    dht11_data = devm_kzalloc(dev, sizeof(struct dht11_module_data), GFP_KERNEL);
     if (dht11_data == NULL)
     {
         dev_err(dev, "Failed at getting memory!\n");
@@ -214,7 +214,7 @@ static int dht11_probe(struct platform_device *pdev)
 }
 static int dht11_remove(struct platform_device *pdev)
 {
-    struct dht11_module_data dht11_data = platform_get_drvdata(pdev);
+    struct dht11_module_data *dht11_data = platform_get_drvdata(pdev);
     unregister_chrdev_region(MKDEV(dht11_data->major, 0), 1);
     device_destroy(dht11_data->dht11_class, MKDEV(dht11_data->major, 0));
     cdev_del(&dht11_data->dht11_cdev);
@@ -242,12 +242,12 @@ static ssize_t write_measurements_to_user(struct dht11_module_data *dht11_data, 
     return copy_to_user(buf, &measurement, sizeof(struct dht11_measurement)) ? sizeof(struct dht11_measurement) : 0;
 }
 // This function is called with irqs disabled
-static u32 count_cycles_in_pulse(int value)
+static u32 count_cycles_in_pulse(struct dht11_module_data *dht11_data, int value)
 {
     u32 count = 0;
-    while (gpiod_get_value(data->gpio) == value)
+    while (gpiod_get_value(dht11_data->gpio) == value)
     {
-        if (count++ >= max_cycles)
+        if (count++ >= dht11_data->max_cycles)
         {
             return TIMEOUT;
         }
