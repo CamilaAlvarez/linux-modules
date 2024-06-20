@@ -17,7 +17,7 @@ To dynamically install an overlay we need to:
 mount -t configfs non /sys/kernel/config 
 ````
 
-2. Create folder for the overlay ``foo`` under the overlays folder
+2. Create folder for the overlay ``foo`` under the overlays folder (``foo`` must match the ``.dtbo``filename)
 
 ````
 mkdir /sys/kernel/config/device-tree/overlay/foo

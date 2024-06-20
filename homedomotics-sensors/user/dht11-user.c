@@ -15,7 +15,7 @@ int main(int argc, char **argv)
         return 1;
     read(fd, &measurement, sizeof(struct dht11_measurement));
     if (measurement.successful)
-        printf("Humidity: %d.%d\%RH Temperature: %d.%d°C\n",
+        printf("Humidity: %d.%d\%RH Temperature: %d.%dC\n",
                measurement.humidity,
                measurement.humidity_decimal,
                measurement.temperature,

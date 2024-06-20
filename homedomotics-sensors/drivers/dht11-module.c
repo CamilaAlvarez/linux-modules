@@ -32,7 +32,8 @@ static ssize_t write_measurements_to_user(struct dht11_module_data *dht11_data, 
 static u32 count_cycles_in_pulse(struct dht11_module_data *dht11_data, int value);
 static bool compute_values(struct dht11_module_data *dht11_data, u32 *low_values, u32 *high_values);
 static u8 compute_single_value(u32 *low_values, u32 *high_values, int offset);
-char *dht11_class_devnode(const struct device *dev, umode_t *mode);
+// we set the mode so that everyone can read from the device
+static char *dht11_class_devnode(struct device *dev, umode_t *mode);
 
 struct dht11_module_data
 {
@@ -303,9 +304,9 @@ static u8 compute_single_value(u32 *low_values, u32 *high_values, int offset)
     }
     return value;
 }
-char *dht11_class_devnode(const struct device *dev, umode_t *mode)
+static char *dht11_class_devnode(struct device *dev, umode_t *mode)
 {
-    if (mode == NULL)
+    if (mode != NULL)
         *mode = S_IRUGO;
     return NULL;
 }
