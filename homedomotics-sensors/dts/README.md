@@ -20,7 +20,7 @@ mount -t configfs non /sys/kernel/config
 2. Create folder for the overlay ``foo`` under the overlays folder
 
 ````
-mkdir /sys/kernel/config/device-tree/overlay/fo
+mkdir /sys/kernel/config/device-tree/overlay/foo
 ````
 
 3. Load the overlay into the directory:

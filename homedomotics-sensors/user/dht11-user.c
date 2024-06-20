@@ -13,10 +13,13 @@ int main(int argc, char **argv)
     int fd = 0;
     if ((fd = open(DHT11_CHAR_DEVICE, O_RDONLY)) < -1)
         return 1;
-    if (read(fd, &measurement, sizeof(struct dht11_measurement)) != sizeof(struct dht11_measurement))
-        return 1;
+    read(fd, &measurement, sizeof(struct dht11_measurement));
     if (measurement.successful)
-        printf("Humidity: %d.%d\%RH Temperature: %d.%dºC\n");
+        printf("Humidity: %d.%d\%RH Temperature: %d.%d°C\n",
+               measurement.humidity,
+               measurement.humidity_decimal,
+               measurement.temperature,
+               measurement.temperature_decimal);
     else
         printf("Invalid reading\n");
     return 0;

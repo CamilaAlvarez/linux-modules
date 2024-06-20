@@ -14,6 +14,7 @@
 #include <linux/delay.h>
 #include <linux/smp.h>
 #include <linux/cpufreq.h>
+#include <linux/stat.h>
 #include "../include/dht11-data.h"
 
 #define DHT11_DEVICE_NAME "dht11_module"
@@ -26,6 +27,12 @@
 #define BITS_PER_VALUE 8
 // We cannot sleep in the read since reading from the sensor is time sensitive
 // Also, it is a bad idea to sleep with interrupts disabled!
+struct dht11_module_data;
+static ssize_t write_measurements_to_user(struct dht11_module_data *dht11_data, char __user *buf, size_t count);
+static u32 count_cycles_in_pulse(struct dht11_module_data *dht11_data, int value);
+static bool compute_values(struct dht11_module_data *dht11_data, u32 *low_values, u32 *high_values);
+static u8 compute_single_value(u32 *low_values, u32 *high_values, int offset);
+char *dht11_class_devnode(const struct device *dev, umode_t *mode);
 
 struct dht11_module_data
 {
@@ -44,10 +51,7 @@ struct dht11_module_data
     u8 last_successful_temperature_decimal;
     int max_cycles;
 };
-static ssize_t write_measurements_to_user(struct dht11_module_data *dht11_data, char __user *buf, size_t count);
-static u32 count_cycles_in_pulse(struct dht11_module_data *dht11_data, int value);
-static bool compute_values(struct dht11_module_data *dht11_data, u32 *low_values, u32 *high_values);
-static u8 compute_single_value(u32 *low_values, u32 *high_values, int offset);
+
 static int open_sensors(struct inode *inode, struct file *flip)
 {
     struct dht11_module_data *dht11_data = container_of(inode->i_cdev, struct dht11_module_data, dht11_cdev);
@@ -176,6 +180,7 @@ static int dht11_probe(struct platform_device *pdev)
     dht11_data->major = MAJOR(devt);
     dev_info(dev, "dht11 major number is = %d\n", dht11_data->major);
     dht11_data->dht11_class = class_create(THIS_MODULE, "dht11_char_class");
+    dht11_data->dht11_class->devnode = dht11_class_devnode;
     if (IS_ERR(dht11_data->dht11_class))
     {
         dev_err(dev, "Error creating dht11 module class\n");
@@ -297,6 +302,12 @@ static u8 compute_single_value(u32 *low_values, u32 *high_values, int offset)
         }
     }
     return value;
+}
+char *dht11_class_devnode(const struct device *dev, umode_t *mode)
+{
+    if (mode == NULL)
+        *mode = S_IRUGO;
+    return NULL;
 }
 static const struct of_device_id dht11_dts_ids[] = {
     {.compatible = "calvarez,dht11"},
