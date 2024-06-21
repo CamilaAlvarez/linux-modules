@@ -6,47 +6,44 @@
 #include <linux/miscdevice.h>
 #include <linux/io.h>
 #include <linux/spinlock.h>
+#include <linux/version.h>
 
 #define MODNAME "mq135_module"
-
+#define BUFSIZE 10
 struct mq135_module_data
 {
     struct miscdevice *dev;
     spinlock_t i2c_client_spinlock;
     struct i2c_client *client;
-}
+};
 
 static ssize_t mq135_read(struct file *flip, char __user *buf, size_t count, loff_t *off)
 {
     int quality, ret;
-    struct miscdevice *dev = file->private_data;
-    struct mq135_module_data *mq135_data = container_of(dev, struct mq135_module_data, dev);
-    spin_lock(mq135_data->i2c_client_spinlock);
-    ret = i2c_master_recv(mq135->client, &quality, sizeof(int));
-    spin_unlock(mq135_data->i2c_client_spinlock);
+    char outbuf[BUFSIZE];
+    struct miscdevice *dev = flip->private_data;
+    // First parameter is a pointer to the field, since the field is a pointer we pass **
+    struct mq135_module_data *mq135_data = container_of(&dev, struct mq135_module_data, dev);
+    spin_lock(&mq135_data->i2c_client_spinlock);
+    ret = i2c_master_recv(mq135_data->client, outbuf, BUFSIZE);
+    spin_unlock(&mq135_data->i2c_client_spinlock);
     if (ret < 0)
     {
-        dev_err(&mq135_data->client->adapter->dev, "Could not read quality of air\n"); 
-    } else 
+        dev_err(&mq135_data->client->adapter->dev, "Could not read quality of air\n");
+    }
+    else
     {
         dev_info(&mq135_data->client->adapter->dev, "Current air quality: %d\n", quality);
-        ret = copy_to_user(buf, &quality, sizeof(int));
+        ret = copy_to_user(buf, outbuf, BUFSIZE);
     }
-    return ret ? -EFAULT : 0; 
+    return ret ? -EFAULT : 0;
 }
-
-// Open will set file->private_data to the misc device
-static const struct file_operations mq135_ops = {
-    .llseek = no_llseek,
-    .read = mq135_read,
-};
-static struct miscdevice mq135_device = {
-    .minor = MISC_DYNAMIC_MINOR,
-    .name = MODNAME,
-    .mode = 0444,
-    .fops = &mq135_ops,
-};
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+static int mq135_probe(struct i2c_client *client, const struct i2c_device_id *id)
+#else
 static int mq135_probe(struct i2c_client *client)
+#endif
+
 {
     int err;
     struct mq135_module_data *mq135_data;
@@ -81,7 +78,7 @@ static const struct of_device_id mq135_dts_ids[] = {
     {.compatible = "calvarez,mq135"},
     {},
 };
-static struct ic2_driver mq135_driver = {
+static struct i2c_driver mq135_driver = {
     .probe = mq135_probe,
     .remove = mq135_remove,
     .driver = {
