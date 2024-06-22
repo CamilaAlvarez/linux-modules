@@ -2,13 +2,16 @@
 /plugin/;
 / {
     compatible = "brcm,bcm2835", "brcm,bcm2836", "brcm,bcm2708", "brcm,bcm2709", "brcm,bcm2711";
-    @fragment0 {
+    fragment@0 {
         target = <&i2c1>;
         __overlay__ {
+            #address-cells = <1>;
+            #size-cells = <0>;
             mq135: mq135@15 {
                 compatible = "calvarez,mq135";
                 reg = <0x15>;
-            }
+                status = "okay";
+            };
         };
     };
 };
