@@ -7,9 +7,9 @@
         __overlay__ {
             #address-cells = <1>;
             #size-cells = <0>;
-            mq135: mq135@15 {
+            mq135: mq135@48 {
                 compatible = "calvarez,mq135";
-                reg = <0x15>;
+                reg = <0x48>; # board already has a pull-down resistor that controls ADDR to GND 
                 status = "okay";
             };
         };
