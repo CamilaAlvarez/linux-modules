@@ -5,7 +5,7 @@
 #include <linux/device.h>
 #include <linux/miscdevice.h>
 #include <linux/io.h>
-#include <linux/spinlock.h>
+#include <linux/mutex.h>
 #include <linux/version.h>
 
 #define MODNAME "mq135_module"
@@ -13,7 +13,7 @@
 struct mq135_module_data
 {
     struct miscdevice *dev;
-    spinlock_t i2c_client_spinlock;
+    struct mutex i2c_client_mutex;
     struct i2c_client *client;
 };
 
@@ -24,9 +24,9 @@ static ssize_t mq135_read(struct file *flip, char __user *buf, size_t count, lof
     struct miscdevice *dev = flip->private_data;
     // First parameter is a pointer to the field, since the field is a pointer we pass **
     struct mq135_module_data *mq135_data = container_of(&dev, struct mq135_module_data, dev);
-    spin_lock(&mq135_data->i2c_client_spinlock);
+    mutex_lock(&mq135_data->i2c_client_mutex);
     ret = i2c_master_recv(mq135_data->client, outbuf, BUFSIZE);
-    spin_unlock(&mq135_data->i2c_client_spinlock);
+    mutex_unlock(&mq135_data->i2c_client_mutex);
     if (ret < 0)
     {
         dev_err(&mq135_data->client->adapter->dev, "Could not read quality of air\n");
@@ -61,7 +61,7 @@ static int mq135_probe(struct i2c_client *client)
         dev_err(&client->adapter->dev, "Could not get memory fo MQ135\n");
         return -ENOMEM;
     }
-    spin_lock_init(&mq135_data->i2c_client_spinlock);
+    mutex_init(&mq135_data->i2c_client_mutex);
     mq135_data->dev = &mq135_device;
     mq135_data->client = client;
     i2c_set_clientdata(client, mq135_data);
