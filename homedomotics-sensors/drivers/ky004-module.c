@@ -41,27 +41,27 @@ static int ky004_probe(struct platform_device *device)
     struct ky004_data *data;
     int irq_button, error;
     long irq_flags;
-    button = devm_gpio_get(&device->dev, "button", GPIOD_IN);
-    if (button == -ENOENT)
+    button = devm_gpiod_get(&device->dev, "button", GPIOD_IN);
+    if (IS_ERR(button))
     {
         dev_err(&device->dev, "Could not get gpio descriptor for the button\n");
-        return button;
+        return PTR_ERR(button);
     }
     irq_button = gpiod_to_irq(button);
     if (gpiod_is_active_low(button))
         irq_flags = IRQF_TRIGGER_FALLING;
     else
         irq_flags = IRQF_TRIGGER_RISING;
-    led = devm_gpio_get(&device->dev, "led", GPIOD_OUT_LOW);
-    if (led == -ENOENT)
+    led = devm_gpiod_get(&device->dev, "led", GPIOD_OUT_LOW);
+    if (IS_ERR(led))
     {
         dev_err(&device->dev, "Could not get gpio descriptor for the led\n");
-        return led;
+        return PTR_ERR(led);
     }
     data = kzalloc(sizeof(struct ky004_data), GFP_KERNEL);
     if (data == NULL)
     {
-        dev_error(&device->dev, "Could not get memory for KY-004\n");
+        dev_err(&device->dev, "Could not get memory for KY-004\n");
         return -ENOMEM;
     }
     data->on = false;
@@ -71,14 +71,14 @@ static int ky004_probe(struct platform_device *device)
     spin_lock_init(&data->data_spinlock);
     spin_lock_init(&data->led_spinlock);
     error = devm_request_any_context_irq(&device->dev, irq_button, button_interrupt_handler,
-                                         DEVICE_NAME, data);
+                                         irq_flags, DEVICE_NAME, data);
     if (error)
     {
         dev_err(&device->dev, "irq %d request failed: %d\n", irq_button, error);
         kfree(data);
         return error;
     }
-    error = misc_register(ky004_device);
+    error = misc_register(&ky004_device);
     if (error)
     {
         dev_err(&device->dev, "Could not register device\n");
@@ -87,13 +87,15 @@ static int ky004_probe(struct platform_device *device)
     }
     data->dev = &ky004_device;
     platform_set_drvdata(device, (void *)data);
+    dev_info(&device->dev, "Loaded KY-004 module\n");
     return 0;
 }
-static void ky004_remove(struct platform_device *device)
+static int ky004_remove(struct platform_device *device)
 {
     struct ky004_data *data = (struct ky004_data *)platform_get_drvdata(device);
     kfree(data);
-    misc_unregister(ky004_device);
+    misc_deregister(&ky004_device);
+    return 0;
 }
 static irqreturn_t button_interrupt_handler(int irq, void *dev_id)
 {
@@ -116,21 +118,22 @@ static irqreturn_t button_interrupt_handler(int irq, void *dev_id)
 static unsigned int ky004_poll(struct file *flip, poll_table *wait)
 {
     unsigned int reval_mask = 0;
-    struct miscdevice *dev = file->private_data;
-    struct ky004_data *data = container_of(&dev, struct ky004_dev, dev);
+    struct miscdevice *dev = flip->private_data;
+    struct ky004_data *data = container_of(&dev, struct ky004_data, dev);
     if (data->on)
-        retval_mask = POLLIN | POLLRDNORM;
+        reval_mask = POLLIN | POLLRDNORM;
     else
-        poll_wait(file, &onq, wait);
+        poll_wait(flip, &onq, wait);
     return reval_mask;
 }
-static const struct of_device_id ky004_device_ids = {
+static const struct of_device_id ky004_device_ids[] = {
     {.compatible = "calvarez,ky004"},
-    {}};
+    {},
+};
 static struct platform_driver ky004_driver = {
     .probe = ky004_probe,
-    .remove_new = ky004_remove,
-    .drive = {
+    .remove = ky004_remove,
+    .driver = {
         .name = "ky004-driver",
         .owner = THIS_MODULE,
         .of_match_table = of_match_ptr(ky004_device_ids)}};
