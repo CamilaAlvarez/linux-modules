@@ -12,9 +12,9 @@
 #include <linux/fs.h>
 #include <linux/poll.h>
 
-#define DEVICE_NAME "KY004_DEVICE"
+#define DEVICE_NAME "ky004"
 static irqreturn_t button_interrupt_handler(int irq, void *dev_id);
-static unsigned int ky004_poll(struct file *flip, poll_table *wait);i
+static unsigned int ky004_poll(struct file *flip, poll_table *wait);
 
 static DECLARE_WAIT_QUEUE_HEAD(onq);
 struct ky004_data
@@ -29,14 +29,12 @@ struct ky004_data
 };
 static struct file_operations ky004_fops = {
     .llseek = no_llseek,
-    .poll = ky004_poll
-};
+    .poll = ky004_poll};
 static struct miscdevice ky004_device = {
     .minor = MISC_DYNAMIC_MINOR,
     .mode = 0400,
     .fops = &ky004_fops,
-    .name = DEVICE_NAME
-};
+    .name = DEVICE_NAME};
 static int ky004_probe(struct platform_device *device)
 {
     struct gpio_desc *button, *led;
@@ -73,7 +71,7 @@ static int ky004_probe(struct platform_device *device)
     spin_lock_init(&data->data_spinlock);
     spin_lock_init(&data->led_spinlock);
     error = devm_request_any_context_irq(&device->dev, irq_button, button_interrupt_handler,
-            DEVICE_NAME, data);
+                                         DEVICE_NAME, data);
     if (error)
     {
         dev_err(&device->dev, "irq %d request failed: %d\n", irq_button, error);
@@ -93,7 +91,7 @@ static int ky004_probe(struct platform_device *device)
 }
 static void ky004_remove(struct platform_device *device)
 {
-    struct ky004_data *data = (struct ky004_data*)platform_get_drvdata(device);
+    struct ky004_data *data = (struct ky004_data *)platform_get_drvdata(device);
     kfree(data);
     misc_unregister(ky004_device);
 }
@@ -127,18 +125,15 @@ static unsigned int ky004_poll(struct file *flip, poll_table *wait)
     return reval_mask;
 }
 static const struct of_device_id ky004_device_ids = {
-    { .compatible = "calvarez,ky004" },
-    {}
-};
+    {.compatible = "calvarez,ky004"},
+    {}};
 static struct platform_driver ky004_driver = {
     .probe = ky004_probe,
     .remove_new = ky004_remove,
     .drive = {
         .name = "ky004-driver",
         .owner = THIS_MODULE,
-        .of_match_table = of_match_ptr(ky004_device_ids) 
-    }
-};
+        .of_match_table = of_match_ptr(ky004_device_ids)}};
 MODULE_DEVICE_TABLE(of, ky004_device_ids);
 module_platform_driver(ky004_driver);
 MODULE_AUTHOR("Camila Alvarez<cam.alvarez.i@gmail.com>");
