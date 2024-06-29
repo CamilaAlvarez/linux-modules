@@ -7,7 +7,7 @@
         __overlay__ {
             ky004_module_device {
                 compatible = "calvarez,ky004";
-                button-gpio = <&gpio 27 0>; //GPIO_ACTIVE_HIGH is 0
+                button-gpio = <&gpio 27 1>; //GPIO_ACTIVE_HIGH is 0
                 led-gpio = <&gpio 22 1>;
                 interrupt-parent = <&gpio>;
                 interrupts = <27 2>; // <pin triggering: 2 is edge falling>
