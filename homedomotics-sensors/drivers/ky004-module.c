@@ -122,6 +122,9 @@ static irqreturn_t button_interrupt_handler(int irq, void *dev_id)
         spin_lock(&data->led_spinlock);
         gpiod_set_value(data->led_gpio, device_status ? 1 : 0);
         spin_unlock(&data->led_spinlock);
+        spin_lock(&data->time_spinlock);
+        data->last_button_press = now;
+        spin_unlock(&data->time_spinlock);
         if (device_status)
             wake_up_interruptible(&onq);
     }
