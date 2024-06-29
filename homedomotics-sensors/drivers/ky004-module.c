@@ -109,10 +109,10 @@ static irqreturn_t button_interrupt_handler(int irq, void *dev_id)
     bool device_status;
     u64 last_press, now;
     now = ktime_get_ns();
+    data = dev_id;
     spin_lock(&data->time_spinlock);
     last_press = data->last_button_press;
     spin_unlock(&data->time_spinlock);
-    data = dev_id;
     if (data->button_irq == irq && (now - last_press) > DEBOUNCE_NANO)
     {
         spin_lock(&data->data_spinlock);
