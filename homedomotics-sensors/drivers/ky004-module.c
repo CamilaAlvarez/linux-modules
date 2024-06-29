@@ -11,8 +11,10 @@
 #include <linux/miscdevice.h>
 #include <linux/fs.h>
 #include <linux/poll.h>
+#include <linux/timekeeping.h>
 
 #define DEVICE_NAME "ky004"
+#define DEBOUNCE_NANO 200000000
 static irqreturn_t button_interrupt_handler(int irq, void *dev_id);
 static unsigned int ky004_poll(struct file *flip, poll_table *wait);
 
@@ -26,6 +28,8 @@ struct ky004_data
     struct gpio_desc *led_gpio;
     int button_irq;
     struct miscdevice *dev;
+    spinlock_t time_spinlock;
+    u64 last_button_press;
 };
 static struct file_operations ky004_fops = {
     .llseek = no_llseek,
@@ -68,8 +72,10 @@ static int ky004_probe(struct platform_device *device)
     data->button_gpio = button;
     data->led_gpio = led;
     data->button_irq = irq_button;
+    data->last_button_press = ktime_get_ns() - DEBOUNCE_NANO;
     spin_lock_init(&data->data_spinlock);
     spin_lock_init(&data->led_spinlock);
+    spin_lock_init(&data->time_spinlock);
     error = devm_request_any_context_irq(&device->dev, irq_button, button_interrupt_handler,
                                          irq_flags, DEVICE_NAME, data);
     if (error)
@@ -99,9 +105,15 @@ static int ky004_remove(struct platform_device *device)
 }
 static irqreturn_t button_interrupt_handler(int irq, void *dev_id)
 {
+    struct ky004_data *data;
     bool device_status;
-    struct ky004_data *data = dev_id;
-    if (data->button_irq == irq)
+    u64 last_press, now;
+    now = ktime_get_ns();
+    spin_lock(&data->time_spinlock);
+    last_press = data->last_button_press;
+    spin_unlock(&data->time_spinlock);
+    data = dev_id;
+    if (data->button_irq == irq && (now - last_press) > DEBOUNCE_NANO)
     {
         spin_lock(&data->data_spinlock);
         device_status = !data->on;
