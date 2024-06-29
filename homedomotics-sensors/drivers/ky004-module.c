@@ -36,7 +36,7 @@ static struct file_operations ky004_fops = {
     .poll = ky004_poll};
 static struct miscdevice ky004_device = {
     .minor = MISC_DYNAMIC_MINOR,
-    .mode = 0400,
+    .mode = 0444,
     .fops = &ky004_fops,
     .name = DEVICE_NAME};
 static int ky004_probe(struct platform_device *device)
