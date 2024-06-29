@@ -14,8 +14,8 @@
 #include <linux/timekeeping.h>
 
 #define DEVICE_NAME "ky004"
-#define ON 0
-#define OFF 1
+#define ON 1
+#define OFF 0
 #define DEBOUNCE_NANO 200000000
 static irqreturn_t button_interrupt_handler(int irq, void *dev_id);
 static unsigned int ky004_poll(struct file *flip, poll_table *wait);
