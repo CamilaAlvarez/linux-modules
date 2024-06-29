@@ -14,6 +14,8 @@
 #include <linux/timekeeping.h>
 
 #define DEVICE_NAME "ky004"
+#define ON 0
+#define OFF 1
 #define DEBOUNCE_NANO 200000000
 static irqreturn_t button_interrupt_handler(int irq, void *dev_id);
 static unsigned int ky004_poll(struct file *flip, poll_table *wait);
@@ -27,7 +29,6 @@ struct ky004_data
     spinlock_t led_spinlock;
     struct gpio_desc *led_gpio;
     int button_irq;
-    struct miscdevice *dev;
     spinlock_t time_spinlock;
     u64 last_button_press;
 };
@@ -62,6 +63,7 @@ static int ky004_probe(struct platform_device *device)
         dev_err(&device->dev, "Could not get gpio descriptor for the led\n");
         return PTR_ERR(led);
     }
+    gpiod_set_value(led, OFF);
     data = kzalloc(sizeof(struct ky004_data), GFP_KERNEL);
     if (data == NULL)
     {
@@ -91,7 +93,7 @@ static int ky004_probe(struct platform_device *device)
         kfree(data);
         return error;
     }
-    data->dev = &ky004_device;
+    dev_set_drvdata(ky004_device.this_device, data);
     platform_set_drvdata(device, (void *)data);
     dev_info(&device->dev, "Loaded KY-004 module\n");
     return 0;
@@ -99,6 +101,7 @@ static int ky004_probe(struct platform_device *device)
 static int ky004_remove(struct platform_device *device)
 {
     struct ky004_data *data = (struct ky004_data *)platform_get_drvdata(device);
+    gpiod_set_value(data->led_gpio, OFF);
     kfree(data);
     misc_deregister(&ky004_device);
     return 0;
@@ -120,7 +123,7 @@ static irqreturn_t button_interrupt_handler(int irq, void *dev_id)
         data->on = device_status;
         spin_unlock(&data->data_spinlock);
         spin_lock(&data->led_spinlock);
-        gpiod_set_value(data->led_gpio, device_status ? 1 : 0);
+        gpiod_set_value(data->led_gpio, device_status ? ON : OFF);
         spin_unlock(&data->led_spinlock);
         spin_lock(&data->time_spinlock);
         data->last_button_press = now;
@@ -133,8 +136,7 @@ static irqreturn_t button_interrupt_handler(int irq, void *dev_id)
 static unsigned int ky004_poll(struct file *flip, poll_table *wait)
 {
     unsigned int reval_mask = 0;
-    struct miscdevice *dev = flip->private_data;
-    struct ky004_data *data = container_of(&dev, struct ky004_data, dev);
+    struct ky004_data *data = dev_get_drvdata(ky004_device.this_device);
     if (data->on)
         reval_mask = POLLIN | POLLRDNORM;
     else
