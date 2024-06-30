@@ -1,0 +1,17 @@
+/dts-v1/;
+/plugin/;
+/ {
+    compatible = "brcm,bcm2835", "brcm,bcm2836", "brcm,bcm2708", "brcm,bcm2709", "brcm,bcm2711";
+    fragment@0 {
+        target-path = "/";
+        __overlay__ {
+            ky004_module_device {
+                compatible = "calvarez,ky004";
+                button-gpio = <&gpio 27 1>; //GPIO_ACTIVE_HIGH is 0
+                led-gpio = <&gpio 22 1>;
+                interrupt-parent = <&gpio>;
+                interrupts = <27 2>; // <pin triggering: 2 is edge falling>
+            };
+        };
+    };
+};
