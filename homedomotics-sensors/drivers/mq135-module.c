@@ -7,6 +7,7 @@
 #include <linux/io.h>
 #include <linux/mutex.h>
 #include <linux/version.h>
+#include <linux/fs.h>
 
 #define MODNAME "mq135_module"
 #define BUFSIZE 10
@@ -16,14 +17,25 @@ struct mq135_module_data
     struct mutex i2c_client_mutex;
     struct i2c_client *client;
 };
+static ssize_t mq135_read(struct file *flip, char __user *buf, size_t count, loff_t *off);
+static const struct file_operations mq135_fops = {
+    .llseek = no_llseek,
+    .read = mq135_read,
 
+};
+static struct miscdevice mq135_device = {
+    .minor = MISC_DYNAMIC_MINOR,
+    .name = "MQ135_device",
+    .mode = 0444,
+    .fops = &mq135_fops,
+};
 static ssize_t mq135_read(struct file *flip, char __user *buf, size_t count, loff_t *off)
 {
     int quality, ret;
     char outbuf[BUFSIZE];
     struct miscdevice *dev = flip->private_data;
     // First parameter is a pointer to the field, since the field is a pointer we pass **
-    struct mq135_module_data *mq135_data = container_of(&dev, struct mq135_module_data, dev);
+    struct mq135_module_data *mq135_data = dev_get_drvdata(dev.this_device);
     mutex_lock(&mq135_data->i2c_client_mutex);
     ret = i2c_master_recv(mq135_data->client, outbuf, BUFSIZE);
     mutex_unlock(&mq135_data->i2c_client_mutex);
@@ -64,6 +76,7 @@ static int mq135_probe(struct i2c_client *client)
     mutex_init(&mq135_data->i2c_client_mutex);
     mq135_data->dev = &mq135_device;
     mq135_data->client = client;
+    dev_set_drvdata(mq135_device.this_device, mq135_data);
     i2c_set_clientdata(client, mq135_data);
     return 0;
 }
