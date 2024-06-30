@@ -35,7 +35,7 @@ static ssize_t mq135_read(struct file *flip, char __user *buf, size_t count, lof
     char outbuf[BUFSIZE];
     struct miscdevice *dev = flip->private_data;
     // First parameter is a pointer to the field, since the field is a pointer we pass **
-    struct mq135_module_data *mq135_data = dev_get_drvdata(dev.this_device);
+    struct mq135_module_data *mq135_data = dev_get_drvdata(dev->this_device);
     mutex_lock(&mq135_data->i2c_client_mutex);
     ret = i2c_master_recv(mq135_data->client, outbuf, BUFSIZE);
     mutex_unlock(&mq135_data->i2c_client_mutex);
@@ -50,12 +50,8 @@ static ssize_t mq135_read(struct file *flip, char __user *buf, size_t count, lof
     }
     return ret ? -EFAULT : 0;
 }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+// Using the old version since we work with a raspberry pi
 static int mq135_probe(struct i2c_client *client, const struct i2c_device_id *id)
-#else
-static int mq135_probe(struct i2c_client *client)
-#endif
-
 {
     int err;
     struct mq135_module_data *mq135_data;
