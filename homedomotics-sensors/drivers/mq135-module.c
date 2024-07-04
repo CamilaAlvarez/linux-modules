@@ -168,6 +168,7 @@ static ssize_t mq135_read(struct file *flip, char __user *buf, size_t count, lof
 finally:
     if (ret > 0)
     {
+        data.read_data = 1;
         data.air_quality = quality;
     }
     // 5. Send data
