@@ -8,9 +8,9 @@
 #include <linux/mutex.h>
 #include <linux/version.h>
 #include <linux/fs.h>
+#include "../include/mq135-data.h"
 
 #define MODNAME "mq135_module"
-#define BUFSIZE 10
 struct mq135_module_data
 {
     struct miscdevice *dev;
@@ -29,25 +29,144 @@ static struct miscdevice mq135_device = {
     .mode = 0444,
     .fops = &mq135_fops,
 };
-static ssize_t mq135_read(struct file *flip, char __user *buf, size_t count, loff_t *off)
+static int write_config(struct mq135_module_data *mq135_data)
 {
-    int quality, ret;
-    char outbuf[BUFSIZE];
-    struct miscdevice *dev = flip->private_data;
-    // First parameter is a pointer to the field, since the field is a pointer we pass **
-    struct mq135_module_data *mq135_data = dev_get_drvdata(dev->this_device);
+    int ret;
+    const int buffer_size = 3;
+    char config_buffer[3];
+    uint16_t config = CONFIG_COMP_QUE_1CONV | CONFIG_COMP_NOLAT | CONFIG_COMP_POL_LOW | CONFIG_COMP_MODE_TRAD |
+                      CONFIG_DATA_RATE | CONFIG_MODE | CONFIG_PGA_DEFAULT | CONFIG_MUX_A0 | CONFIG_OS;
+    // There's no need to send the address as a first parameter, since the i2c_client already has it
+    config_buffer[0] = CONFIG_REGISTER;
+    config_buffer[1] = config >> 8;
+    config_buffer[2] = config & 0x00FF;
     mutex_lock(&mq135_data->i2c_client_mutex);
-    ret = i2c_master_recv(mq135_data->client, outbuf, BUFSIZE);
+    ret = i2c_master_send(mq135_data->client, config_buffer, buffer_size);
+    mutex_unlock(&mq135_data->i2c_client_mutex);
+    return ret;
+}
+static int activate_alert_rdy(struct mq135_module_data *mq135_data)
+{
+    int ret;
+    const int buffer_size = 2;
+    char config[2];
+    // HIGH THRESH
+    config[0] = HI_THRESH_REGISTER;
+    config[1] = 0x80;
+    mutex_lock(&mq135_data->i2c_client_mutex);
+    ret = i2c_master_send(mq135_data->client, config, buffer_size);
+    mutex_unlock(&mq135_data->i2c_client_mutex);
+    if (ret < 0)
+        return ret;
+    // LOW THRESH
+    config[0] = LO_THRESH_RWGISTER;
+    config[1] = 0x00;
+    mutex_lock(&mq135_data->i2c_client_mutex);
+    ret = i2c_master_send(mq135_data->client, config, buffer_size);
+    mutex_unlock(&mq135_data->i2c_client_mutex);
+    return ret;
+}
+static uint16_t conversion_running(struct mq135_module_data *mq135_data, int *err)
+{
+    int ret;
+    uint16_t read_config = 0x0000;
+    const int buffer_size = 2;
+    char buffer[2];
+    // Tell the device which register I want to read from
+    buffer[0] = CONFIG_REGISTER;
+    mutex_lock(&mq135_data->i2c_client_mutex);
+    ret = i2c_master_send(mq135_data->client, buffer, 1);
     mutex_unlock(&mq135_data->i2c_client_mutex);
     if (ret < 0)
     {
-        dev_err(&mq135_data->client->adapter->dev, "Could not read quality of air\n");
+        *err = ret;
+        return 0;
     }
-    else
+    buffer[0] = 0;
+    buffer[1] = 0;
+    mutex_lock(&mq135_data->i2c_client_mutex);
+    ret = i2c_master_recv(mq135_data->client, buffer, buffer_size);
+    mutex_unlock(&mq135_data->i2c_client_mutex);
+    if (ret < 0)
     {
-        dev_info(&mq135_data->client->adapter->dev, "Current air quality: %d\n", quality);
-        ret = copy_to_user(buf, outbuf, BUFSIZE);
+        *err = ret;
+        return 0;
     }
+    *err = 0;
+    read_config |= (buffer[0] << 8);
+    read_config |= buffer[1];
+    return (read_config & 0x8000) != 0;
+}
+static int16_t read_converted_data(struct mq135_module_data *mq135_data, int *err)
+{
+    int ret, buffer_size = 2;
+    int16_t read_data = 0;
+    char buffer[2];
+    buffer[0] = CONVERSION_REGISTER;
+    // Read from conversion register
+    mutex_lock(&mq135_data->i2c_client_mutex);
+    ret = i2c_master_send(mq135_data->client, buffer, 1);
+    mutex_unlock(&mq135_data->i2c_client_mutex);
+    if (ret < 0)
+    {
+        *err = ret;
+        return read_data;
+    }
+    buffer[0] = 0;
+    buffer[1] = 0;
+    mutex_lock(&mq135_data->i2c_client_mutex);
+    ret = i2c_master_recv(mq135_data->client, buffer, buffer_size);
+    mutex_unlock(&mq135_data->i2c_client_mutex);
+    if (ret < 0)
+    {
+        *err = ret;
+        return read_data;
+    }
+    read_data = (int16_t)(buffer[0] << 8) | buffer[1];
+    *err = 0;
+    return read_data;
+}
+static ssize_t mq135_read(struct file *flip, char __user *buf, size_t count, loff_t *off)
+{
+    int quality, ret, err;
+    struct miscdevice *dev = flip->private_data;
+    struct mq135_module_data *mq135_data = dev_get_drvdata(dev->this_device);
+
+    // 1. Configure the device
+    ret = write_config(mq135_data);
+    if (ret < 0)
+    {
+        dev_err(&mq135_data->client->adapter->dev, "Error configuring device ADS1115\n");
+        goto finally;
+    }
+    // 2. Activate alert
+    ret = activate_alert_rdy(mq135_data);
+    if (ret < 0)
+    {
+        dev_err(&mq135_data->client->adapter->dev, "Could not set alrt/rdy ADS1115\n");
+        goto finally;
+    }
+    // 3. Wait until conversion is ready
+    while (conversion_running(mq135_data, &err))
+        ;
+    if (err < 0)
+    {
+        ret = err;
+        dev_err(&mq135_data->client->adapter->dev, "Error converting data ADS1115\n");
+        goto finally;
+    }
+    // 4. Read output
+    quality = (int)read_converted_data(mq135_data, &err);
+    if (err)
+    {
+        ret = err;
+        dev_err(&mq135_data->client->adapter->dev, "Could not read quality of air\n");
+        goto finally;
+    }
+    dev_info(&mq135_data->client->adapter->dev, "Current air quality: %d\n", (int)quality);
+    ret = copy_to_user(buf, &quality, sizeof(int));
+
+finally:
     return ret ? -EFAULT : 0;
 }
 // Using the old version since we work with a raspberry pi
