@@ -25,7 +25,7 @@ static const struct file_operations mq135_fops = {
 };
 static struct miscdevice mq135_device = {
     .minor = MISC_DYNAMIC_MINOR,
-    .name = "MQ135_device",
+    .name = "mq135_device",
     .mode = 0444,
     .fops = &mq135_fops,
 };
@@ -129,6 +129,7 @@ static int16_t read_converted_data(struct mq135_module_data *mq135_data, int *er
 static ssize_t mq135_read(struct file *flip, char __user *buf, size_t count, loff_t *off)
 {
     int quality, ret, err;
+    struct mq135_measurement data = {.air_quality = 0, .read_data = 0};
     struct miscdevice *dev = flip->private_data;
     struct mq135_module_data *mq135_data = dev_get_drvdata(dev->this_device);
 
@@ -163,11 +164,15 @@ static ssize_t mq135_read(struct file *flip, char __user *buf, size_t count, lof
         dev_err(&mq135_data->client->adapter->dev, "Could not read quality of air\n");
         goto finally;
     }
-    dev_info(&mq135_data->client->adapter->dev, "Current air quality: %d\n", (int)quality);
-    ret = copy_to_user(buf, &quality, sizeof(int));
-
+    dev_info(&mq135_data->client->adapter->dev, "Current air quality: %d\n", quality);
 finally:
-    return ret ? -EFAULT : 0;
+    if (ret > 0)
+    {
+        data.air_quality = quality;
+    }
+    // 5. Send data
+    ret = copy_to_user(buf, &data, sizeof(struct mq135_measurement));
+    return ret < 0 ? -EFAULT : 0;
 }
 // Using the old version since we work with a raspberry pi
 static int mq135_probe(struct i2c_client *client, const struct i2c_device_id *id)

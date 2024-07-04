@@ -1,6 +1,8 @@
 #ifndef MQ135_DATA
 #define MQ135_DATA
 
+#define MQ135_DEVICE "/dev/mq135_device"
+
 #define ADS1115_ADDRESS (0x48)
 #define CONFIG_REGISTER (0x01)
 #define HI_THRESH_REGISTER (0x03)
@@ -17,5 +19,11 @@
 #define CONFIG_PGA_DEFAULT (0x0400)
 #define CONFIG_MUX_A0 (0x4000)
 #define CONFIG_OS (0x8000)
+
+struct mq135_measurement
+{
+    int air_quality;
+    unsigned char read_data;
+};
 
 #endif
