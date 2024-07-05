@@ -5,8 +5,6 @@
 #include <fcntl.h>
 #include "../include/dht11-data.h"
 
-#define DHT11_CHAR_DEVICE "/dev/dht11_module"
-
 int main(int argc, char **argv)
 {
     struct dht11_measurement measurement;
