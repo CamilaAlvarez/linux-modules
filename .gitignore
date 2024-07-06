@@ -53,3 +53,7 @@ dkms.conf
 
 # Visual studio code
 .vscode
+
+#python
+myenv/
+build/
